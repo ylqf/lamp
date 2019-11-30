@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright (C) 2014 - 2017, Teddysun <i@teddysun.com>
+# Copyright (C) 2013 - 2019 Teddysun <i@teddysun.com>
 # 
 # This file is part of the LAMP script.
 #
@@ -207,7 +207,7 @@ start_backup() {
     fi
 
     # Delete MySQL temporary dump file
-    for sql in `ls ${TEMPDIR}*.sql`
+    for sql in $(ls ${TEMPDIR}*.sql)
     do
         log "Delete MySQL temporary dump file: ${sql}"
         rm -f ${sql}
@@ -218,7 +218,7 @@ start_backup() {
     else
         OUT_FILE="${TARFILE}"
     fi
-    log "File name: ${OUT_FILE}, File size: `calculate_size ${OUT_FILE}`"
+    log "File name: ${OUT_FILE}, File size: $(calculate_size ${OUT_FILE})"
 }
 
 # Transfer backup file to Google Drive

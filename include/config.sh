@@ -1,4 +1,4 @@
-# Copyright (C) 2014 - 2017, Teddysun <i@teddysun.com>
+# Copyright (C) 2013 - 2019 Teddysun <i@teddysun.com>
 # 
 # This file is part of the LAMP script.
 #
@@ -28,134 +28,195 @@ depends_prefix=/usr/local
 web_root_dir=/data/www/default
 
 #Download root URL
-download_root_url="http://dl.lamp.sh/files"
+download_root_url="https://dl.lamp.sh/files/"
 
 #parallel compile option,1:enable,0:disable
 parallel_compile=1
 
 ##Software version
 #nghttp2
-nghttp2_filename="nghttp2-1.23.0"
+nghttp2_filename="nghttp2-1.40.0"
+nghttp2_filename_url="https://github.com/nghttp2/nghttp2/releases/download/v1.40.0/nghttp2-1.40.0.tar.gz"
 #openssl
-openssl_filename="openssl-1.0.2l"
-#apache2.2
-apache2_2_filename="httpd-2.2.34"
+openssl_filename="openssl-1.1.1d"
+openssl_filename_url="https://www.openssl.org/source/openssl-1.1.1d.tar.gz"
 #apache2.4
-apache2_4_filename="httpd-2.4.27"
+apache2_4_filename="httpd-2.4.41"
+apache2_4_filename_url="http://ftp.jaist.ac.jp/pub/apache//httpd/httpd-2.4.41.tar.gz"
 #mysql5.5
-mysql5_5_filename="mysql-5.5.57"
+mysql5_5_filename="mysql-5.5.62"
 #mysql5.6
-mysql5_6_filename="mysql-5.6.37"
+mysql5_6_filename="mysql-5.6.46"
 #mysql5.7
-mysql5_7_filename="mysql-5.7.19"
+mysql5_7_filename="mysql-5.7.28"
+#mysql8.0
+mysql8_0_filename="mysql-8.0.18"
 #mariadb5.5
-mariadb5_5_filename="mariadb-5.5.57"
+mariadb5_5_filename="mariadb-5.5.66"
 #mariadb10.0
-mariadb10_0_filename="mariadb-10.0.31"
+mariadb10_0_filename="mariadb-10.0.38"
 #mariadb10.1
-mariadb10_1_filename="mariadb-10.1.25"
+mariadb10_1_filename="mariadb-10.1.43"
 #mariadb10.2
-mariadb10_2_filename="mariadb-10.2.7"
+mariadb10_2_filename="mariadb-10.2.29"
+#mariadb10.3
+mariadb10_3_filename="mariadb-10.3.20"
+#mariadb10.4
+mariadb10_4_filename="mariadb-10.4.10"
 #percona5.5
-percona5_5_filename="Percona-Server-5.5.55-38.8"
+percona5_5_filename="Percona-Server-5.5.62-38.14"
 #percona5.6
-percona5_6_filename="Percona-Server-5.6.36-82.0"
+percona5_6_filename="Percona-Server-5.6.46-86.2"
 #percona5.7
-percona5_7_filename="Percona-Server-5.7.18-15"
-#php5.3
-php5_3_filename="php-5.3.29"
-#php5.4
-php5_4_filename="php-5.4.45"
-#php5.5
-php5_5_filename="php-5.5.38"
+percona5_7_filename="Percona-Server-5.7.28-31"
+#percona8.0
+percona8_0_filename="Percona-Server-8.0.16-7"
 #php5.6
-php5_6_filename="php-5.6.31"
+php5_6_filename="php-5.6.40"
+php5_6_filename_url="https://www.php.net/distributions/php-5.6.40.tar.gz"
 #php7.0
-php7_0_filename="php-7.0.21"
+php7_0_filename="php-7.0.33"
+php7_0_filename_url="https://www.php.net/distributions/php-7.0.33.tar.gz"
 #php7.1
-php7_1_filename="php-7.1.7"
+php7_1_filename="php-7.1.33"
+php7_1_filename_url="https://www.php.net/distributions/php-7.1.33.tar.gz"
+#php7.2
+php7_2_filename="php-7.2.25"
+php7_2_filename_url="https://www.php.net/distributions/php-7.2.25.tar.gz"
+#php7.3
+php7_3_filename="php-7.3.12"
+php7_3_filename_url="https://www.php.net/distributions/php-7.3.12.tar.gz"
 #phpMyAdmin
-phpmyadmin_filename="phpMyAdmin-4.4.15.10-all-languages"
-phpmyadmin_filename2="phpMyAdmin-4.7.3-all-languages"
-#opcache
-opcache_filename="zendopcache-7.0.5"
+phpmyadmin_filename="phpMyAdmin-4.9.2-all-languages"
+phpmyadmin_filename_url="https://files.phpmyadmin.net/phpMyAdmin/4.9.2/phpMyAdmin-4.9.2-all-languages.tar.gz"
+#kodexplorer
+kod_version=$(wget --no-check-certificate -qO- https://api.github.com/repos/kalcaddle/kodfile/releases/latest | grep 'tag_name' | cut -d\" -f4)
+[ -z "${kod_version}" ] && kod_version="4.35"
+kodexplorer_filename="kodfile-${kod_version}"
+kodexplorer_filename_url="https://github.com/kalcaddle/kodfile/archive/${kod_version}.tar.gz"
+set_hint ${kodexplorer_filename} "kodexplorer-${kod_version}"
 
 #apr
-apr_filename="apr-1.6.2"
+apr_filename="apr-1.7.0"
+apr_filename_url="http://ftp.jaist.ac.jp/pub/apache//apr/apr-1.7.0.tar.gz"
 #apr-util
-apr_util_filename="apr-util-1.6.0"
+apr_util_filename="apr-util-1.6.1"
+apr_util_filename_url="http://ftp.jaist.ac.jp/pub/apache//apr/apr-util-1.6.1.tar.gz"
+#mod_wsgi
+mod_wsgi_filename="mod_wsgi-4.6.5"
+mod_wsgi_filename_url="https://github.com/GrahamDumpleton/mod_wsgi/archive/4.6.5.tar.gz"
+#mod_jk
+mod_jk_filename="tomcat-connectors-1.2.46-src"
+mod_jk_filename_url="http://ftp.jaist.ac.jp/pub/apache/tomcat/tomcat-connectors/jk/tomcat-connectors-1.2.46-src.tar.gz"
+set_hint ${mod_jk_filename} "mod_jk-1.2.46"
+#mod_security
+mod_security_filename="modsecurity-2.9.3"
+mod_security_filename_url="https://github.com/SpiderLabs/ModSecurity/releases/download/v2.9.3/modsecurity-2.9.3.tar.gz"
+set_hint ${mod_security_filename} "mod_security-2.9.3"
 #mhash
 mhash_filename="mhash-0.9.9.9"
+mhash_filename_url="https://sourceforge.net/projects/mhash/files/mhash/0.9.9.9/mhash-0.9.9.9.tar.gz/download"
 #libmcrypt
 libmcrypt_filename="libmcrypt-2.5.8"
+libmcrypt_filename_url="https://sourceforge.net/projects/mcrypt/files/Libmcrypt/2.5.8/libmcrypt-2.5.8.tar.gz/download"
 #mcrypt
 mcrypt_filename="mcrypt-2.6.8"
+mcrypt_filename_url="https://sourceforge.net/projects/mcrypt/files/MCrypt/2.6.8/mcrypt-2.6.8.tar.gz/download"
 #pcre
-pcre_filename="pcre-8.40"
+pcre_filename="pcre-8.43"
+pcre_filename_url="https://ftp.pcre.org/pub/pcre/pcre-8.43.tar.gz"
 #re2c
-re2c_filename='re2c-0.16'
-#imap
-imap_filename='imap-2007f'
+re2c_filename="re2c-1.2.1"
+re2c_filename_url="https://github.com/skvadrik/re2c/releases/download/1.2.1/re2c-1.2.1.tar.xz"
+#libzip
+libzip_filename="libzip-1.3.2"
+libzip_filename_url="https://libzip.org/download/libzip-1.3.2.tar.gz"
 #libiconv
-libiconv_filename="libiconv-1.15"
+libiconv_filename="libiconv-1.16"
+libiconv_filename_url="https://ftp.gnu.org/pub/gnu/libiconv/libiconv-1.16.tar.gz"
 #swoole
-swoole_filename="swoole-src-2.0.7"
-set_hint ${swoole_filename} "php-swoole-2.0.7"
+swoole_filename="swoole-src-4.4.12"
+swoole_filename_url="https://github.com/swoole/swoole-src/archive/v4.4.12.tar.gz"
+set_hint ${swoole_filename} "php-swoole-4.4.12"
+#yaf
+yaf_filename="yaf-3.0.8"
+yaf_filename_url="https://pecl.php.net/get/yaf-3.0.8.tgz"
 #xcache
 xcache_filename="xcache-3.2.0"
+xcache_filename_url="https://xcache.lighttpd.net/pub/Releases/3.2.0/xcache-3.2.0.tar.gz"
 #xdebug
-xdebug_filename="xdebug-2.5.3"
+xdebug_filename="xdebug-2.5.5"
+xdebug_filename_url="https://xdebug.org/files/xdebug-2.5.5.tgz"
+xdebug_filename2="xdebug-2.7.2"
+xdebug_filename2_url="https://xdebug.org/files/xdebug-2.7.2.tgz"
 #ImageMagick
-ImageMagick_filename="ImageMagick-7.0.5-5"
-php_imagemagick_filename="imagick-3.4.3"
+ImageMagick_filename="ImageMagick-7.0.8-68"
+ImageMagick_filename_url="https://www.imagemagick.org/download/releases/ImageMagick-7.0.8-68.tar.gz"
+php_imagemagick_filename="imagick-3.4.4"
+php_imagemagick_filename_url="https://pecl.php.net/get/imagick-3.4.4.tgz"
 set_hint ${php_imagemagick_filename} "php-${php_imagemagick_filename}"
 #GraphicsMagick
-GraphicsMagick_filename="GraphicsMagick-1.3.25"
+GraphicsMagick_filename="GraphicsMagick-1.3.33"
+GraphicsMagick_filename_url="https://sourceforge.net/projects/graphicsmagick/files/graphicsmagick/1.3.33/GraphicsMagick-1.3.33.tar.gz/download"
 php_graphicsmagick_filename="gmagick-1.1.7RC3"
-php_graphicsmagick_filename2="gmagick-2.0.4RC1"
+php_graphicsmagick_filename_url="https://pecl.php.net/get/gmagick-1.1.7RC3.tgz"
+php_graphicsmagick_filename2="gmagick-2.0.5RC1"
+php_graphicsmagick_filename2_url="https://pecl.php.net/get/gmagick-2.0.5RC1.tgz"
 set_hint ${php_graphicsmagick_filename} "php-${php_graphicsmagick_filename}"
 set_hint ${php_graphicsmagick_filename2} "php-${php_graphicsmagick_filename2}"
 #ionCube
 ionCube_filename="ioncube_loaders"
 ionCube32_filename="ioncube_loaders_lin_x86"
+ionCube32_filename_url="https://downloads.ioncube.com/loader_downloads/ioncube_loaders_lin_x86.tar.gz"
 ionCube64_filename="ioncube_loaders_lin_x86-64"
-#ZendGuardLoader
-ZendGuardLoader_filename="ZendGuardLoader"
-ZendGuardLoader53_32_filename="ZendGuardLoader-php-5.3-linux-glibc23-i386"
-ZendGuardLoader53_64_filename="ZendGuardLoader-php-5.3-linux-glibc23-x86_64"
-ZendGuardLoader54_32_filename="ZendGuardLoader-70429-PHP-5.4-linux-glibc23-i386"
-ZendGuardLoader54_64_filename="ZendGuardLoader-70429-PHP-5.4-linux-glibc23-x86_64"
-ZendGuardLoader55_32_filename="zend-loader-php5.5-linux-i386"
-ZendGuardLoader55_64_filename="zend-loader-php5.5-linux-x86_64"
-ZendGuardLoader56_32_filename="zend-loader-php5.6-linux-i386"
-ZendGuardLoader56_64_filename="zend-loader-php5.6-linux-x86_64"
+ionCube64_filename_url="https://downloads.ioncube.com/loader_downloads/ioncube_loaders_lin_x86-64.tar.gz"
 #libevent
-libevent_filename="libevent-2.0.22-stable"
+libevent_filename="libevent-2.1.8-stable"
+libevent_filename_url="https://github.com/libevent/libevent/releases/download/release-2.1.8-stable/libevent-2.1.8-stable.tar.gz"
 #memcached
-memcached_filename="memcached-1.4.36"
+memcached_filename="memcached-1.5.19"
+memcached_filename_url="http://www.memcached.org/files/memcached-1.5.19.tar.gz"
 #libmemcached
 libmemcached_filename="libmemcached-1.0.18"
-#php-memcache
-php_memcache_filename="memcache-3.0.8"
+libmemcached_filename_url="https://launchpadlibrarian.net/165454254/libmemcached-1.0.18.tar.gz"
 #php-memcached
-php_memcached_filename="memcached-3.0.3"
+php_memcached_filename="memcached-2.2.0"
+php_memcached_filename_url="https://pecl.php.net/get/memcached-2.2.0.tgz"
+php_memcached_filename2="memcached-3.1.3"
+php_memcached_filename2_url="https://pecl.php.net/get/memcached-3.1.3.tgz"
 set_hint ${php_memcached_filename} "php-${php_memcached_filename}"
+set_hint ${php_memcached_filename2} "php-${php_memcached_filename2}"
 #redis
-redis_filename="redis-3.2.8"
+redis_filename="redis-5.0.6"
+redis_filename_url="http://download.redis.io/releases/redis-5.0.6.tar.gz"
 #php-redis
-php_redis_filename="redis-2.2.8"
-php_redis_filename2="redis-3.1.2"
+php_redis_filename="redis-4.3.0"
+php_redis_filename_url="https://pecl.php.net/get/redis-4.3.0.tgz"
+php_redis_filename2="redis-5.0.2"
+php_redis_filename2_url="https://pecl.php.net/get/redis-5.0.2.tgz"
 set_hint ${php_redis_filename} "php-${php_redis_filename}"
 set_hint ${php_redis_filename2} "php-${php_redis_filename2}"
 #php-mongodb
-php_mongo_filename="mongodb-1.2.8"
+php_mongo_filename="mongodb-1.6.0"
+php_mongo_filename_url="https://pecl.php.net/get/mongodb-1.6.0.tgz"
 set_hint ${php_mongo_filename} "php-${php_mongo_filename}"
+#php-libsodium
+libsodium_filename="libsodium-1.0.18"
+libsodium_filename_url="https://download.libsodium.org/libsodium/releases/libsodium-1.0.18.tar.gz"
+php_libsodium_filename="libsodium-php-2.0.22"
+php_libsodium_filename_url="https://github.com/jedisct1/libsodium-php/archive/2.0.22.tar.gz"
 
 
 #software array setting
 apache_arr=(
-${apache2_2_filename}
 ${apache2_4_filename}
+do_not_install
+)
+
+apache_modules_arr=(
+${mod_wsgi_filename}
+${mod_security_filename}
+${mod_jk_filename}
 do_not_install
 )
 
@@ -163,23 +224,26 @@ mysql_arr=(
 ${mysql5_5_filename}
 ${mysql5_6_filename}
 ${mysql5_7_filename}
+${mysql8_0_filename}
 ${mariadb5_5_filename}
 ${mariadb10_0_filename}
 ${mariadb10_1_filename}
 ${mariadb10_2_filename}
+${mariadb10_3_filename}
+${mariadb10_4_filename}
 ${percona5_5_filename}
 ${percona5_6_filename}
 ${percona5_7_filename}
+${percona8_0_filename}
 do_not_install
 )
 
 php_arr=(
-${php5_3_filename}
-${php5_4_filename}
-${php5_5_filename}
 ${php5_6_filename}
 ${php7_0_filename}
 ${php7_1_filename}
+${php7_2_filename}
+${php7_3_filename}
 do_not_install
 )
 
@@ -188,9 +252,12 @@ ${phpmyadmin_filename}
 do_not_install
 )
 
+kodexplorer_arr=(
+${kodexplorer_filename}
+do_not_install
+)
+
 php_modules_arr=(
-${opcache_filename}
-${ZendGuardLoader_filename}
 ${ionCube_filename}
 ${xcache_filename}
 ${php_imagemagick_filename}
@@ -198,7 +265,9 @@ ${php_graphicsmagick_filename}
 ${php_memcached_filename}
 ${php_redis_filename}
 ${php_mongo_filename}
+${php_libsodium_filename}
 ${swoole_filename}
+${yaf_filename}
 ${xdebug_filename}
 do_not_install
 )

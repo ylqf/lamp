@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Copyright (C) 2014 - 2017, Teddysun <i@teddysun.com>
+# Copyright (C) 2013 - 2019 Teddysun <i@teddysun.com>
 # 
 # This file is part of the LAMP script.
 #
@@ -9,7 +9,7 @@
 # Just need to input numbers to choose what you want to install before installation.
 # And all things will be done in a few minutes.
 #
-# System Required:  CentOS 5+ / Debian 7+ / Ubuntu 12+
+# System Required:  CentOS 6+ / Fedora28+ / Debian 8+ / Ubuntu 14+
 # Description:  Update LAMP(Linux + Apache + MySQL/MariaDB/Percona + PHP )
 # Website:  https://lamp.sh
 # Github:   https://github.com/teddysun/lamp
@@ -17,9 +17,7 @@
 PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin:~/bin
 export PATH
 
-cur_dir=`pwd`
-
-[[ ${EUID} -ne 0 ]] && echo "Error: This script must be run as root!" && exit 1
+cur_dir=$(pwd)
 
 include(){
     local include=$1
@@ -31,15 +29,7 @@ include(){
     fi
 }
 
-include config
-include public
-include upgrade_apache
-include upgrade_db
-include upgrade_php
-include upgrade_phpmyadmin
-
-
-display_menu(){
+upgrade_menu(){
 
     echo
     echo "+-------------------------------------------------------------------+"
@@ -48,22 +38,20 @@ display_menu(){
     echo "| Author: Teddysun <i@teddysun.com>                                 |"
     echo "+-------------------------------------------------------------------+"
     echo
-    rootness
-    load_config
 
-    while :
+    while true
     do
-    echo -e "\t\033[32m1\033[0m. Upgrade Apache"
-    echo -e "\t\033[32m2\033[0m. Upgrade MySQL/MariaDB/Percona"
-    echo -e "\t\033[32m3\033[0m. Upgrade PHP"
-    echo -e "\t\033[32m4\033[0m. Upgrade phpMyAdmin"
-    echo -e "\t\033[32m5\033[0m. Exit"
+    _info "$(_green 1). Upgrade Apache"
+    _info "$(_green 2). Upgrade MySQL/MariaDB/Percona"
+    _info "$(_green 3). Upgrade PHP"
+    _info "$(_green 4). Upgrade phpMyAdmin"
+    _info "$(_green 5). Exit"
     echo
-    read -p "Please input a number: " Number
-    if [[ ! ${Number} =~ ^[1-5]$ ]];then
-        echo "Input error! Please only input 1,2,3,4,5"
+    read -p "Please input a number: " number
+    if [[ ! ${number} =~ ^[1-5]$ ]]; then
+        _error "Input error, please only input 1~5"
     else
-        case "${Number}" in
+        case "${number}" in
         1)
             upgrade_apache 2>&1 | tee ${cur_dir}/upgrade_apache.log
             break
@@ -89,7 +77,6 @@ display_menu(){
 
 }
 
-
 display_usage(){
 printf "
 
@@ -102,13 +89,18 @@ phpmyadmin                --->Upgrade phpMyAdmin
 "
 }
 
+include config
+include public
+include upgrade_apache
+include upgrade_db
+include upgrade_php
+include upgrade_phpmyadmin
+load_config
+rootness
 
-if   [ $# == 0 ];then
-    display_menu
-elif [ $# == 1 ];then
-    rootness
-    load_config
-
+if [ ${#} -eq 0 ]; then
+    upgrade_menu
+elif [ ${#} -eq 1 ]; then
     case $1 in
     apache)
         upgrade_apache 2>&1 | tee ${cur_dir}/upgrade_apache.log

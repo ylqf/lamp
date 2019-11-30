@@ -1,4 +1,4 @@
-# Copyright (C) 2014 - 2017, Teddysun <i@teddysun.com>
+# Copyright (C) 2013 - 2019 Teddysun <i@teddysun.com>
 # 
 # This file is part of the LAMP script.
 #
@@ -14,7 +14,11 @@
 #Pre-installation mysql or mariadb or percona
 mysql_preinstall_settings(){
 
-    display_menu mysql 6
+    if version_lt $(get_libc_version) 2.14; then
+        mysql_arr=(${mysql_arr[@]#${mariadb10_3_filename}})
+        mysql_arr=(${mysql_arr[@]#${mariadb10_4_filename}})
+    fi
+    display_menu mysql 3
 
     if [ "${mysql}" != "do_not_install" ];then
         if echo "${mysql}" | grep -qi "mysql"; then
@@ -22,14 +26,14 @@ mysql_preinstall_settings(){
             echo
             read -p "mysql data location(default:${mysql_location}/data, leave blank for default): " mysql_data_location
             mysql_data_location=${mysql_data_location:=${mysql_location}/data}
-            mysql_data_location=`filter_location "${mysql_data_location}"`
+            mysql_data_location=$(filter_location "${mysql_data_location}")
             echo
             echo "mysql data location: ${mysql_data_location}"
 
             #set mysql server root password
             echo
-            read -p "mysql server root password (default:root, leave blank for default): " mysql_root_pass
-            mysql_root_pass=${mysql_root_pass:=root}
+            read -p "mysql server root password (default:lamp.sh, leave blank for default): " mysql_root_pass
+            mysql_root_pass=${mysql_root_pass:=lamp.sh}
             echo
             echo "mysql server root password: ${mysql_root_pass}"
 
@@ -38,30 +42,33 @@ mysql_preinstall_settings(){
             echo
             read -p "mariadb data location(default:${mariadb_location}/data, leave blank for default): " mariadb_data_location
             mariadb_data_location=${mariadb_data_location:=${mariadb_location}/data}
-            mariadb_data_location=`filter_location "${mariadb_data_location}"`
+            mariadb_data_location=$(filter_location "${mariadb_data_location}")
             echo
             echo "mariadb data location: ${mariadb_data_location}"
 
             #set mariadb server root password
             echo
-            read -p "mariadb server root password (default:root, leave blank for default): " mariadb_root_pass
-            mariadb_root_pass=${mariadb_root_pass:=root}
+            read -p "mariadb server root password (default:lamp.sh, leave blank for default): " mariadb_root_pass
+            mariadb_root_pass=${mariadb_root_pass:=lamp.sh}
             echo
             echo "mariadb server root password: $mariadb_root_pass"
 
         elif echo "${mysql}" | grep -qi "Percona"; then
+            if [ "${mysql}" == "${percona8_0_filename}" ] && ! is_64bit; then
+                _error "${percona8_0_filename} is not support 32 bit OS, please change to 64 bit OS and try again"
+            fi
             #percona data
             echo
             read -p "percona data location(default:${percona_location}/data, leave blank for default): " percona_data_location
             percona_data_location=${percona_data_location:=${percona_location}/data}
-            percona_data_location=`filter_location "${percona_data_location}"`
+            percona_data_location=$(filter_location "${percona_data_location}")
             echo
             echo "percona data location: $percona_data_location"
 
             #set percona server root password
             echo
-            read -p "percona server root password (default:root, leave blank for default): " percona_root_pass
-            percona_root_pass=${percona_root_pass:=root}
+            read -p "percona server root password (default:lamp.sh, leave blank for default): " percona_root_pass
+            percona_root_pass=${percona_root_pass:=lamp.sh}
             echo
             echo "percona server root password: ${percona_root_pass}"
 
@@ -73,13 +80,13 @@ mysql_preinstall_settings(){
 common_install(){
 
     local apt_list=(libncurses5-dev cmake m4 bison libaio1 libaio-dev numactl)
-    local yum_list=(ncurses-devel cmake m4 bison libaio libaio-devel numactl-devel)
+    local yum_list=(ncurses-devel cmake m4 bison libaio libaio-devel numactl-devel libevent)
     if is_64bit; then
         local perl_data_dumper_url="${download_root_url}/perl-Data-Dumper-2.125-1.el6.rf.x86_64.rpm"
     else
         local perl_data_dumper_url="${download_root_url}/perl-Data-Dumper-2.125-1.el6.rf.i686.rpm"
     fi
-    log "Info" "Starting to install dependencies packages for Database..."
+    _info "Starting to install dependencies packages for Database..."
     if check_sys packageManager apt; then
         for depend in ${apt_list[@]}; do
             error_detect_depends "apt-get -y install ${depend}"
@@ -91,15 +98,18 @@ common_install(){
         if centosversion 6; then
             rpm -q perl-Data-Dumper > /dev/null 2>&1
             if [ $? -ne 0 ]; then
-                log "Info" "Starting to install package perl-Data-Dumper"
+                _info "Starting to install package perl-Data-Dumper"
                 rpm -Uvh ${perl_data_dumper_url} > /dev/null 2>&1
-                [ $? -ne 0 ] && log "Error" "Install package perl-Data-Dumper failed" && exit 1
+                [ $? -ne 0 ] && _error "Install package perl-Data-Dumper failed"
             fi
-        elif centosversion 7; then
+        else
             error_detect_depends "yum -y install perl-Data-Dumper"
         fi
+        if echo $(get_opsy) | grep -Eqi "fedora"; then
+            error_detect_depends "yum -y install ncurses-compat-libs"
+        fi
     fi
-    log "Info" "Install dependencies packages for Database completed..."
+    _info "Install dependencies packages for Database completed..."
 
     id -u mysql >/dev/null 2>&1
     [ $? -ne 0 ] && useradd -M -s /sbin/nologin mysql
@@ -113,17 +123,127 @@ common_install(){
     fi
 }
 
+#create mysql cnf
+create_mysql_my_cnf(){
+
+    local mysqlDataLocation=${1}
+    local binlog=${2}
+    local replica=${3}
+    local my_cnf_location=${4}
+
+    local memory=512M
+    local storage=InnoDB
+    local totalMemory=$(awk 'NR==1{print $2}' /proc/meminfo)
+    if [[ ${totalMemory} -lt 393216 ]]; then
+        memory=256M
+    elif [[ ${totalMemory} -lt 786432 ]]; then
+        memory=512M
+    elif [[ ${totalMemory} -lt 1572864 ]]; then
+        memory=1G
+    elif [[ ${totalMemory} -lt 3145728 ]]; then
+        memory=2G
+    elif [[ ${totalMemory} -lt 6291456 ]]; then
+        memory=4G
+    elif [[ ${totalMemory} -lt 12582912 ]]; then
+        memory=8G
+    elif [[ ${totalMemory} -lt 25165824 ]]; then
+        memory=16G
+    else
+        memory=32G
+    fi
+
+    case ${memory} in
+        256M)innodb_log_file_size=32M;innodb_buffer_pool_size=64M;open_files_limit=512;table_open_cache=200;max_connections=64;;
+        512M)innodb_log_file_size=32M;innodb_buffer_pool_size=128M;open_files_limit=512;table_open_cache=200;max_connections=128;;
+        1G)innodb_log_file_size=64M;innodb_buffer_pool_size=256M;open_files_limit=1024;table_open_cache=400;max_connections=256;;
+        2G)innodb_log_file_size=64M;innodb_buffer_pool_size=512M;open_files_limit=1024;table_open_cache=400;max_connections=300;;
+        4G)innodb_log_file_size=128M;innodb_buffer_pool_size=1G;open_files_limit=2048;table_open_cache=800;max_connections=400;;
+        8G)innodb_log_file_size=256M;innodb_buffer_pool_size=2G;open_files_limit=4096;table_open_cache=1600;max_connections=400;;
+        16G)innodb_log_file_size=512M;innodb_buffer_pool_size=4G;open_files_limit=8192;table_open_cache=2000;max_connections=512;;
+        32G)innodb_log_file_size=512M;innodb_buffer_pool_size=8G;open_files_limit=65535;table_open_cache=2048;max_connections=1024;;
+        *) echo "input error, please input a number";;
+    esac
+
+    if ${binlog}; then
+        binlog="# BINARY LOGGING #\nlog-bin = ${mysqlDataLocation}/mysql-bin\nserver-id = 1\nexpire-logs-days = 14\nsync-binlog = 1"
+        binlog=$(echo -e $binlog)
+    else
+        binlog=""
+    fi
+
+    if ${replica}; then
+        replica="# REPLICATION #\nrelay-log = ${mysqlDataLocation}/relay-bin\nslave-net-timeout = 60"
+        replica=$(echo -e $replica)
+    else
+        replica=""
+    fi
+
+    _info "create my.cnf file..."
+    cat >${my_cnf_location} <<EOF
+[mysql]
+
+# CLIENT #
+port                           = 3306
+socket                         = /tmp/mysql.sock
+
+[mysqld]
+# GENERAL #
+port                           = 3306
+user                           = mysql
+default-storage-engine         = ${storage}
+socket                         = /tmp/mysql.sock
+pid-file                       = ${mysqlDataLocation}/mysql.pid
+skip-name-resolve
+skip-external-locking
+
+# INNODB #
+innodb-log-files-in-group      = 2
+innodb-log-file-size           = ${innodb_log_file_size}
+innodb-flush-log-at-trx-commit = 2
+innodb-file-per-table          = 1
+innodb-buffer-pool-size        = ${innodb_buffer_pool_size}
+
+# CACHES AND LIMITS #
+tmp-table-size                 = 32M
+max-heap-table-size            = 32M
+max-connections                = ${max_connections}
+thread-cache-size              = 50
+open-files-limit               = ${open_files_limit}
+table-open-cache               = ${table_open_cache}
+
+# SAFETY #
+max-allowed-packet             = 16M
+max-connect-errors             = 1000000
+
+# DATA STORAGE #
+datadir                        = ${mysqlDataLocation}
+
+# LOGGING #
+log-error                      = ${mysqlDataLocation}/mysql-error.log
+
+${binlog}
+
+${replica}
+
+EOF
+
+    _info "create my.cnf file at ${my_cnf_location} completed."
+
+}
+
+
 common_setup(){
 
-    rm -f /usr/bin/mysql /usr/bin/mysqldump
+    rm -f /usr/bin/mysql /usr/bin/mysqldump /usr/bin/mysqladmin
     rm -f /etc/ld.so.conf.d/mysql.conf
 
-    if [ -d ${mysql_location} ]; then
+    if [ -d "${mysql_location}" ]; then
 
         local db_name="MySQL"
         local db_pass="${mysql_root_pass}"
         ln -s ${mysql_location}/bin/mysql /usr/bin/mysql
         ln -s ${mysql_location}/bin/mysqldump /usr/bin/mysqldump
+        ln -s ${mysql_location}/bin/mysqladmin /usr/bin/mysqladmin
         cp -f ${mysql_location}/support-files/mysql.server /etc/init.d/mysqld
         sed -i "s:^basedir=.*:basedir=${mysql_location}:g" /etc/init.d/mysqld
         sed -i "s:^datadir=.*:datadir=${mysql_data_location}:g" /etc/init.d/mysqld
@@ -131,12 +251,13 @@ common_setup(){
         echo "${mysql_location}/lib" >> /etc/ld.so.conf.d/mysql.conf
         echo "${mysql_location}/lib64" >> /etc/ld.so.conf.d/mysql.conf
 
-    elif [ -d ${mariadb_location} ]; then
+    elif [ -d "${mariadb_location}" ]; then
 
         local db_name="MariaDB"
         local db_pass="${mariadb_root_pass}"
         ln -s ${mariadb_location}/bin/mysql /usr/bin/mysql
         ln -s ${mariadb_location}/bin/mysqldump /usr/bin/mysqldump
+        ln -s ${mariadb_location}/bin/mysqladmin /usr/bin/mysqladmin
         cp -f ${mariadb_location}/support-files/mysql.server /etc/init.d/mysqld
         sed -i "s:^basedir=.*:basedir=${mariadb_location}:g" /etc/init.d/mysqld
         sed -i "s:^datadir=.*:datadir=${mariadb_data_location}:g" /etc/init.d/mysqld
@@ -144,12 +265,13 @@ common_setup(){
         echo "${mariadb_location}/lib" >> /etc/ld.so.conf.d/mysql.conf
         echo "${mariadb_location}/lib64" >> /etc/ld.so.conf.d/mysql.conf
 
-    elif [ -d ${percona_location} ]; then
+    elif [ -d "${percona_location}" ]; then
 
         local db_name="Percona Server"
         local db_pass="${percona_root_pass}"
         ln -s ${percona_location}/bin/mysql /usr/bin/mysql
         ln -s ${percona_location}/bin/mysqldump /usr/bin/mysqldump
+        ln -s ${percona_location}/bin/mysqladmin /usr/bin/mysqladmin
         cp -f ${percona_location}/support-files/mysql.server /etc/init.d/mysqld
         sed -i "s:^basedir=.*:basedir=${percona_location}:g" /etc/init.d/mysqld
         sed -i "s:^datadir=.*:datadir=${percona_data_location}:g" /etc/init.d/mysqld
@@ -163,18 +285,26 @@ common_setup(){
     chmod +x /etc/init.d/mysqld
     boot_start mysqld
 
-    log "Info" "Starting ${db_name}..."
+    _info "Starting ${db_name}..."
     /etc/init.d/mysqld start > /dev/null 2>&1
-    /usr/bin/mysql -e "grant all privileges on *.* to root@'127.0.0.1' identified by \"${db_pass}\" with grant option;"
-    /usr/bin/mysql -e "grant all privileges on *.* to root@'localhost' identified by \"${db_pass}\" with grant option;"
-    /usr/bin/mysql -uroot -p${db_pass} <<EOF
+    if [ "${mysql}" == "${mysql8_0_filename}" ] || [ "${mysql}" == "${percona8_0_filename}" ]; then
+        /usr/bin/mysql -uroot -hlocalhost -e "create user root@'127.0.0.1' identified by \"${db_pass}\";"
+        /usr/bin/mysql -uroot -hlocalhost -e "grant all privileges on *.* to root@'127.0.0.1' with grant option;"
+        /usr/bin/mysql -uroot -hlocalhost -e "grant all privileges on *.* to root@'localhost' with grant option;"
+        /usr/bin/mysql -uroot -hlocalhost -e "alter user root@'localhost' identified by \"${db_pass}\";"
+    else
+        /usr/bin/mysql -e "grant all privileges on *.* to root@'127.0.0.1' identified by \"${db_pass}\" with grant option;"
+        /usr/bin/mysql -e "grant all privileges on *.* to root@'localhost' identified by \"${db_pass}\" with grant option;"
+        /usr/bin/mysql -uroot -p${db_pass} <<EOF
 drop database if exists test;
 delete from mysql.user where not (user='root');
 delete from mysql.db where user='';
 flush privileges;
 exit
 EOF
-    log "Info" "Shutting down ${db_name}..."
+    fi
+
+    _info "Shutting down ${db_name}..."
     /etc/init.d/mysqld stop > /dev/null 2>&1
 
 }
@@ -186,16 +316,22 @@ install_mysqld(){
 
     is_64bit && sys_bit=x86_64 || sys_bit=i686
     mysql_ver=$(echo ${mysql} | sed 's/[^0-9.]//g' | cut -d. -f1-2)
-    local url1="http://cdn.mysql.com/Downloads/MySQL-${mysql_ver}/${mysql}-linux-glibc2.12-${sys_bit}.tar.gz"
-    local url2="${download_root_url}/${mysql}-linux-glibc2.12-${sys_bit}.tar.gz"
-
     cd ${cur_dir}/software/
+    _info "Downloading and Extracting MySQL files..."
 
-    download_from_url "${mysql}-linux-glibc2.12-${sys_bit}.tar.gz" "${url1}" "${url2}"
-    log "Info" "Extracting MySQL files..."
-    tar zxf ${mysql}-linux-glibc2.12-${sys_bit}.tar.gz
-    log "Info" "Moving MySQL files..."
-    mv ${mysql}-linux-glibc2.12-${sys_bit}/* ${mysql_location}
+    mysql_filename="${mysql}-linux-glibc2.12-${sys_bit}"
+    if [ "${mysql_ver}" == "8.0" ]; then
+        mysql_filename_url="https://cdn.mysql.com/Downloads/MySQL-${mysql_ver}/${mysql_filename}.tar.xz"
+        download_file "${mysql_filename}.tar.xz" "${mysql_filename_url}"
+        tar Jxf ${mysql_filename}.tar.xz
+    else
+        mysql_filename_url="https://cdn.mysql.com/Downloads/MySQL-${mysql_ver}/${mysql_filename}.tar.gz"
+        download_file "${mysql_filename}.tar.gz" "${mysql_filename_url}"
+        tar zxf ${mysql_filename}.tar.gz
+    fi
+
+    _info "Moving MySQL files..."
+    mv ${mysql_filename}/* ${mysql_location}
 
     config_mysql ${mysql_ver}
 
@@ -216,9 +352,12 @@ config_mysql(){
     #create my.cnf
     create_mysql_my_cnf "${mysql_data_location}" "false" "false" "/etc/my.cnf"
 
+    if [ "${version}" == "8.0" ]; then
+        echo "default_authentication_plugin  = mysql_native_password" >> /etc/my.cnf
+    fi
     if [ "${version}" == "5.5" ] || [ "${version}" == "5.6" ]; then
         ${mysql_location}/scripts/mysql_install_db --basedir=${mysql_location} --datadir=${mysql_data_location} --user=mysql
-    elif [ "${version}" == "5.7" ]; then
+    elif [ "${version}" == "5.7" ] || [ "${version}" == "8.0" ]; then
         ${mysql_location}/bin/mysqld --initialize-insecure --basedir=${mysql_location} --datadir=${mysql_data_location} --user=mysql
     fi
 
@@ -231,17 +370,7 @@ install_mariadb(){
 
     common_install
 
-    if [ "$(get_ip_country)" == "CN" ]; then
-        local down_addr1=http://mirrors.aliyun.com/mariadb/
-        local down_addr2=http://sfo1.mirrors.digitalocean.com/mariadb/
-    else
-        local down_addr1=http://sfo1.mirrors.digitalocean.com/mariadb/
-        local down_addr2=http://mirrors.aliyun.com/mariadb/
-    fi
-
-    local libc_version=`getconf -a | grep GNU_LIBC_VERSION | awk '{print $NF}'`
-
-    if version_lt ${libc_version} 2.14; then
+    if version_lt $(get_libc_version) 2.14; then
         glibc_flag=linux
     else
         glibc_flag=linux-glibc_214
@@ -250,16 +379,20 @@ install_mariadb(){
     is_64bit && sys_bit_a=x86_64 || sys_bit_a=x86
     is_64bit && sys_bit_b=x86_64 || sys_bit_b=i686
 
+    mariadb_filename="${mysql}-${glibc_flag}-${sys_bit_b}"
+    if [ "$(get_ip_country)" == "CN" ]; then
+        mariadb_filename_url="http://mirrors.aliyun.com/mariadb/${mysql}/bintar-${glibc_flag}-${sys_bit_a}/${mariadb_filename}.tar.gz"
+    else
+        mariadb_filename_url="http://sfo1.mirrors.digitalocean.com/mariadb/${mysql}/bintar-${glibc_flag}-${sys_bit_a}/${mariadb_filename}.tar.gz"
+    fi
+
     cd ${cur_dir}/software/
+    download_file "${mariadb_filename}.tar.gz" "${mariadb_filename_url}"
 
-    download_from_url "${mysql}-${glibc_flag}-${sys_bit_b}.tar.gz" \
-    "${down_addr1}/${mysql}/bintar-${glibc_flag}-${sys_bit_a}/${mysql}-${glibc_flag}-${sys_bit_b}.tar.gz" \
-    "${down_addr2}/${mysql}/bintar-${glibc_flag}-${sys_bit_a}/${mysql}-${glibc_flag}-${sys_bit_b}.tar.gz"
-
-    log "Info" "Extracting MariaDB files..."
-    tar zxf ${mysql}-${glibc_flag}-${sys_bit_b}.tar.gz
-    log "Info" "Moving MariaDB files..."
-    mv ${mysql}-*-${sys_bit_b}/* ${mariadb_location}
+    _info "Extracting MariaDB files..."
+    tar zxf ${mariadb_filename}.tar.gz
+    _info "Moving MariaDB files..."
+    mv ${mariadb_filename}/* ${mariadb_location}
 
     config_mariadb
 
@@ -292,7 +425,15 @@ install_percona(){
 
     is_64bit && sys_bit=x86_64 || sys_bit=i686
     if check_sys packageManager apt; then
-        local ssl_ver="ssl100"
+        if [ -n "$(get_debianversion)" ] && [ $(get_debianversion) -lt 9 ]; then
+            local ssl_ver="ssl100"
+        fi
+        if [ -n "$(get_ubuntuversion)" ] && [ $(get_ubuntuversion) -ge 14 ]; then
+            local ssl_ver="ssl102"
+        fi
+        if [ -n "$(get_debianversion)" ] && [ $(get_debianversion) -eq 9 ]; then
+            local ssl_ver="ssl102"
+        fi
     elif check_sys packageManager yum; then
         local ssl_ver="ssl101"
     fi
@@ -302,22 +443,19 @@ install_percona(){
     local down_addr="https://www.percona.com/downloads/Percona-Server-${percona_ver}/${mysql}/binary/tarball"
 
     if [[ "${percona_ver}" == "5.5" || "${percona_ver}" == "5.6" ]]; then
-        tarball="${major_ver}-rel${rel_ver}-Linux.${sys_bit}.${ssl_ver}"
+        percona_filename="${major_ver}-rel${rel_ver}-Linux.${sys_bit}.${ssl_ver}"
     fi
-    if [[ "${percona_ver}" == "5.7" ]]; then
-        tarball="${mysql}-Linux.${sys_bit}.${ssl_ver}"
+    if [[ "${percona_ver}" == "5.7" || "${percona_ver}" == "8.0" ]]; then
+        percona_filename="${mysql}-Linux.${sys_bit}.${ssl_ver}"
     fi
-
-    local url1="${down_addr}/${tarball}.tar.gz"
-    local url2="${download_root_url}/${tarball}.tar.gz"
+    percona_filename_url="${down_addr}/${percona_filename}.tar.gz"
 
     cd ${cur_dir}/software/
-
-    download_from_url "${tarball}.tar.gz" "${url1}" "${url2}"
-    log "Info" "Extracting Percona Server files..."
-    tar zxf ${tarball}.tar.gz
-    log "Info" "Moving Percona Server files..."
-    mv ${tarball}/* ${percona_location}
+    download_file "${percona_filename}.tar.gz" "${percona_filename_url}"
+    _info "Extracting Percona Server files..."
+    tar zxf ${percona_filename}.tar.gz
+    _info "Moving Percona Server files..."
+    mv ${percona_filename}/* ${percona_location}
 
     config_percona ${percona_ver}
 
@@ -338,12 +476,16 @@ config_percona(){
     #create my.cnf
     create_mysql_my_cnf "${percona_data_location}" "false" "false" "/etc/my.cnf"
 
-    sed -ir "s@/usr/local/${tarball}@${percona_location}@g" ${percona_location}/bin/mysqld_safe
-    sed -ir "s@/usr/local/${tarball}@${percona_location}@g" ${percona_location}/bin/mysql_config
+    if [ "${version}" == "8.0" ]; then
+        echo "default_authentication_plugin  = mysql_native_password" >> /etc/my.cnf
+    fi
+
+    sed -ir "s@/usr/local/${percona_filename}@${percona_location}@g" ${percona_location}/bin/mysqld_safe
+    sed -ir "s@/usr/local/${percona_filename}@${percona_location}@g" ${percona_location}/bin/mysql_config
 
     if [ ${version} == "5.5" ] || [ ${version} == "5.6" ]; then
         ${percona_location}/scripts/mysql_install_db --basedir=${percona_location} --datadir=${percona_data_location} --user=mysql
-    elif [ ${version} == "5.7" ]; then
+    elif [ ${version} == "5.7" ] || [ ${version} == "8.0" ]; then
         ${percona_location}/bin/mysqld --initialize-insecure --basedir=${percona_location} --datadir=${percona_data_location} --user=mysql
     fi
 
@@ -353,7 +495,7 @@ config_percona(){
     cd ${percona_location}/lib/
     ln -s libperconaserverclient.a libmysqlclient.a
     ln -s libperconaserverclient.so libmysqlclient.so
-    if [ "$mysql" != "${percona5_7_filename}" ]; then
+    if [ "${mysql}" != "${percona5_7_filename}" ] && [ "${mysql}" != "${percona8_0_filename}" ]; then
         ln -s libperconaserverclient_r.a libmysqlclient_r.a
         ln -s libperconaserverclient_r.so libmysqlclient_r.so
     fi

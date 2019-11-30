@@ -1,4 +1,4 @@
-# Copyright (C) 2014 - 2017, Teddysun <i@teddysun.com>
+# Copyright (C) 2013 - 2019 Teddysun <i@teddysun.com>
 # 
 # This file is part of the LAMP script.
 #
@@ -11,28 +11,41 @@
 # Website:  https://lamp.sh
 # Github:   https://github.com/teddysun/lamp
 
-# Define Color
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-PLAIN='\033[0m'
+_red(){
+    printf '\033[1;31;31m%b\033[0m' "$1"
+}
 
-log(){
-    if   [ "${1}" == "Warning" ]; then
-        echo -e "[${YELLOW}${1}${PLAIN}] ${2}"
-    elif [ "${1}" == "Error" ]; then
-        echo -e "[${RED}${1}${PLAIN}] ${2}"
-    elif [ "${1}" == "Info" ]; then
-        echo -e "[${GREEN}${1}${PLAIN}] ${2}"
-    else
-        echo -e "[${1}] ${2}"
-    fi
+_green(){
+    printf '\033[1;31;32m%b\033[0m' "$1"
+}
+
+_yellow(){
+    printf '\033[1;31;33m%b\033[0m' "$1"
+}
+
+_printargs(){
+    printf -- "%s" "$1"
+    printf "\n"
+}
+
+_info(){
+    _printargs "$@"
+}
+
+_warn(){
+    _yellow "$1"
+    printf "\n"
+}
+
+_error(){
+    _red "$1"
+    printf "\n"
+    exit 1
 }
 
 rootness(){
     if [[ ${EUID} -ne 0 ]]; then
-       log "Error" "This script must be run as root"
-       exit 1
+        _error "This script must be run as root"
     fi
 }
 
@@ -41,15 +54,20 @@ generate_password(){
 }
 
 get_ip(){
-    local IP=$( ip addr | egrep -o '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | egrep -v "^192\.168|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-2]\.|^10\.|^127\.|^255\.|^0\." | head -n 1 )
-    [ -z ${IP} ] && IP=$( wget -qO- -t1 -T2 ipv4.icanhazip.com )
-    [ -z ${IP} ] && IP=$( wget -qO- -t1 -T2 ipinfo.io/ip )
-    [ ! -z ${IP} ] && echo ${IP} || echo
+    local ipv4=$( ip addr | egrep -o '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | \
+    egrep -v "^192\.168|^172\.1[6-9]\.|^172\.2[0-9]\.|^172\.3[0-2]\.|^10\.|^127\.|^255\.|^0\." | head -n 1 )
+    [ -z "${ipv4}" ] && ipv4=$( wget -qO- -t1 -T2 ipv4.icanhazip.com )
+    [ -z "${ipv4}" ] && ipv4=$( wget -qO- -t1 -T2 ipinfo.io/ip )
+    printf -- "%s" "${ipv4}"
 }
 
 get_ip_country(){
     local country=$( wget -qO- -t1 -T2 ipinfo.io/$(get_ip)/country )
-    [ ! -z ${country} ] && echo ${country} || echo
+    printf -- "%s" "${country}"
+}
+
+get_libc_version(){
+    getconf -a | grep GNU_LIBC_VERSION | awk '{print $NF}'
 }
 
 get_opsy(){
@@ -75,17 +93,17 @@ get_os_info(){
 }
 
 get_php_extension_dir(){
-    local phpConfig=${1}
+    local phpConfig="$1"
     ${phpConfig} --extension-dir
 }
 
 get_php_version(){
-    local phpConfig=${1}
+    local phpConfig="$1"
     ${phpConfig} --version | cut -d'.' -f1-2
 }
 
 get_char(){
-    SAVEDSTTY=`stty -g`
+    SAVEDSTTY=$(stty -g)
     stty -echo
     stty cbreak
     dd if=/dev/tty bs=1 count=1 2> /dev/null
@@ -95,19 +113,19 @@ get_char(){
 }
 
 get_valid_valname(){
-    local val=${1}
+    local val="$1"
     local new_val=$(eval echo $val | sed 's/[-.]/_/g')
     echo ${new_val}
 }
 
 get_hint(){
-    local val=${1}
+    local val="$1"
     local new_val=$(get_valid_valname $val)
     eval echo "\$hint_${new_val}"
 }
 
 set_hint(){
-    local val=${1}
+    local val="$1"
     local hint="$2"
     local new_val=$(get_valid_valname $val)
     eval hint_${new_val}="\$hint"
@@ -122,8 +140,8 @@ disable_selinux(){
 
 #Display Memu
 display_menu(){
-    local soft=${1}
-    local default=${2}
+    local soft="$1"
+    local default="$2"
     eval local arr=(\${${soft}_arr[@]})
     local default_prompt
     if [[ "$default" != "" ]]; then
@@ -144,7 +162,7 @@ display_menu(){
             vname="$(get_valid_valname ${arr[$i-1]})"
             hint="$(get_hint $vname)"
             [[ "$hint" == "" ]] && hint="${arr[$i-1]}"
-            echo -e "${GREEN}${i}${PLAIN}) $hint"
+            _info "$(_green ${i}). $hint"
         done
         echo
         read -p "${prompt}" pick
@@ -154,7 +172,7 @@ display_menu(){
         fi
 
         if ! is_digit "$pick"; then
-            prompt="Input error, please input a number"
+            prompt="Input error, please only input a number: "
             continue
         fi
 
@@ -175,8 +193,8 @@ display_menu(){
 
 #Display multiple Menu
 display_menu_multi(){
-    local soft=${1}
-    local default=${2}
+    local soft="$1"
+    local default="$2"
     eval local arr=(\${${soft}_arr[@]})
     local arr_len=${#arr[@]}
     local pick
@@ -194,13 +212,12 @@ display_menu_multi(){
     fi
     prompt="Please input one or more number between 1 and ${arr_len} ${default_prompt} (for example: 1 2 3): "
 
-    echo "-------------------------- $soft install --------------------------"
-    echo
+    echo -e "\n-------------------------- ${soft} install --------------------------\n"
     for ((i=1;i<=${arr_len};i++ )); do
         vname="$(get_valid_valname ${arr[$i-1]})"
         hint="$(get_hint $vname)"
         [[ "$hint" == "" ]] && hint="${arr[$i-1]}"
-        echo -e "${GREEN}${i}${PLAIN}) $hint"
+        _info "$(_green ${i}). $hint"
     done
     echo
     while true
@@ -221,28 +238,23 @@ display_menu_multi(){
         for j in ${pick[@]}
         do
             if ! is_digit "$j"; then
-                echo "Input error, please input a number"
-                correct=false
-                break 1
-            fi    
-
-            if [[ "$j" -lt 1 || "$j" -gt ${arr_len} ]]; then
-                echo "Input error, please input the number between 1 and ${arr_len}${default_prompt}."
+                echo "Input error, please only input a number."
                 correct=false
                 break 1
             fi
-
+            if [[ "$j" -lt 1 || "$j" -gt ${arr_len} ]]; then
+                echo "Input error, please input one or more number between 1 and ${arr_len}${default_prompt}."
+                correct=false
+                break 1
+            fi
             if [ "${arr[$j-1]}" == "do_not_install" ]; then
                 eval ${soft}_install="do_not_install"
                 break 2
             fi
-                
             eval ${soft}_install="\"\$${soft}_install ${arr[$j-1]}\""
             correct=true
-
         done
         [[ "$correct" == true ]] && break
-
     done
 
     echo
@@ -277,213 +289,106 @@ display_os_info(){
 }
 
 check_command_exist(){
-    if [ ! "$(command -v "${1}")" ]; then
-        log "Error" "${1} is not installed, please install it and try again."
-        exit 1
+    local cmd="$1"
+    if eval type type > /dev/null 2>&1; then
+        eval type "$cmd" > /dev/null 2>&1
+    elif command > /dev/null 2>&1; then
+        command -v "$cmd" > /dev/null 2>&1
+    else
+        which "$cmd" > /dev/null 2>&1
+    fi
+    rt=$?
+    if [ ${rt} -ne 0 ]; then
+        _error "$cmd is not installed, please install it and try again."
     fi
 }
 
 check_installed(){
-    local cmd=${1}
-    local location=${2}
+    local cmd="$1"
+    local location="$2"
     if [ -d "${location}" ]; then
-        log "Info" "${location} already exists, skipped the installation."
+        _info "${location} already exists, skipped the installation."
         add_to_env "${location}"
     else
         ${cmd}
     fi
 }
 
+check_os(){
+    is_support_flg=0
+    if check_sys packageManager yum || check_sys packageManager apt; then
+        # Not support CentOS prior to 6 & Debian prior to 8 & Ubuntu prior to 14 versions
+        if [ -n "$(get_centosversion)" ] && [ $(get_centosversion) -lt 6 ]; then
+            is_support_flg=1
+        fi
+        if [ -n "$(get_debianversion)" ] && [ $(get_debianversion) -lt 8 ]; then
+            is_support_flg=1
+        fi
+        if [ -n "$(get_ubuntuversion)" ] && [ $(get_ubuntuversion) -lt 14 ]; then
+            is_support_flg=1
+        fi
+    else
+        is_support_flg=1
+    fi
+    if [ ${is_support_flg} -eq 1 ]; then
+        _error "Not supported OS, please change OS to CentOS 6+ or Debian 8+ or Ubuntu 14+ and try again."
+    fi
+}
+
 check_ram(){
     get_os_info
     if [ ${ramsum} -lt 480 ]; then
-        log "Error" "Not enough memory. The LAMP installation needs memory: ${tram}MB*RAM + ${swap}MB*SWAP >= 480MB"
-        exit 1
+        _error "Not enough memory. The LAMP installation needs memory: ${tram}MB*RAM + ${swap}MB*SWAP >= 480MB"
     fi
     [ ${ramsum} -lt 600 ] && disable_fileinfo="--disable-fileinfo" || disable_fileinfo=""
 }
 
 #Check system
 check_sys(){
-    local checkType=${1}
-    local value=${2}
-
+    local checkType="$1"
+    local value="$2"
     local release=''
     local systemPackage=''
-
     if [[ -f /etc/redhat-release ]]; then
         release="centos"
         systemPackage="yum"
-    elif cat /etc/issue | grep -Eqi "debian"; then
+    elif grep -Eqi "debian" /etc/issue; then
         release="debian"
         systemPackage="apt"
-    elif cat /etc/issue | grep -Eqi "ubuntu"; then
+    elif grep -Eqi "ubuntu" /etc/issue; then
         release="ubuntu"
         systemPackage="apt"
-    elif cat /etc/issue | grep -Eqi "centos|red hat|redhat"; then
+    elif grep -Eqi "centos|red hat|redhat" /etc/issue; then
         release="centos"
         systemPackage="yum"
-    elif cat /proc/version | grep -Eqi "debian"; then
+    elif grep -Eqi "debian" /proc/version; then
         release="debian"
         systemPackage="apt"
-    elif cat /proc/version | grep -Eqi "ubuntu"; then
+    elif grep -Eqi "ubuntu" /proc/version; then
         release="ubuntu"
         systemPackage="apt"
-    elif cat /proc/version | grep -Eqi "centos|red hat|redhat"; then
+    elif grep -Eqi "centos|red hat|redhat" /proc/version; then
         release="centos"
         systemPackage="yum"
     fi
 
-    if [[ ${checkType} == "sysRelease" ]]; then
-        if [ "$value" == "$release" ]; then
+    if [[ "${checkType}" == "sysRelease" ]]; then
+        if [ "${value}" == "${release}" ]; then
             return 0
         else
             return 1
         fi
-    elif [[ ${checkType} == "packageManager" ]]; then
-        if [ "$value" == "$systemPackage" ]; then
+    elif [[ "${checkType}" == "packageManager" ]]; then
+        if [ "${value}" == "${systemPackage}" ]; then
             return 0
         else
             return 1
         fi
     fi
 }
-
-#create mysql cnf
-create_mysql_my_cnf(){
-
-    local mysqlDataLocation=${1}
-    local binlog=${2}
-    local replica=${3}
-    local my_cnf_location=${4}
-
-    local memory=512M
-    local storage=InnoDB
-    local totalMemory=$(awk 'NR==1{print $2}' /proc/meminfo)
-    if [[ ${totalMemory} -lt 393216 ]]; then
-        memory=256M
-        storage=MyISAM
-    elif [[ ${totalMemory} -lt 786432 ]]; then
-        memory=512M
-        storage=MyISAM
-    elif [[ ${totalMemory} -lt 1572864 ]]; then
-        memory=1G
-    elif [[ ${totalMemory} -lt 3145728 ]]; then
-        memory=2G
-    elif [[ ${totalMemory} -lt 6291456 ]]; then
-        memory=4G
-    elif [[ ${totalMemory} -lt 12582912 ]]; then
-        memory=8G
-    elif [[ ${totalMemory} -lt 25165824 ]]; then
-        memory=16G
-    else
-        memory=32G
-    fi
-
-    case ${memory} in
-        256M)innodb_log_file_size=32M;innodb_buffer_pool_size=64M;key_buffer_size=16M;open_files_limit=512;table_open_cache=200;max_connections=64;;
-        512M)innodb_log_file_size=32M;innodb_buffer_pool_size=128M;key_buffer_size=32M;open_files_limit=512;table_open_cache=200;max_connections=128;;
-        1G)innodb_log_file_size=64M;innodb_buffer_pool_size=256M;key_buffer_size=64M;open_files_limit=1024;table_open_cache=400;max_connections=256;;
-        2G)innodb_log_file_size=64M;innodb_buffer_pool_size=512M;key_buffer_size=128M;open_files_limit=1024;table_open_cache=400;max_connections=300;;
-        4G)innodb_log_file_size=128M;innodb_buffer_pool_size=1G;key_buffer_size=256M;open_files_limit=2048;table_open_cache=800;max_connections=400;;
-        8G)innodb_log_file_size=256M;innodb_buffer_pool_size=2G;key_buffer_size=512M;open_files_limit=4096;table_open_cache=1600;max_connections=400;;
-        16G)innodb_log_file_size=512M;innodb_buffer_pool_size=4G;key_buffer_size=1G;open_files_limit=8192;table_open_cache=2000;max_connections=512;;
-        32G)innodb_log_file_size=512M;innodb_buffer_pool_size=8G;key_buffer_size=2G;open_files_limit=65535;table_open_cache=2048;max_connections=1024;;
-        *) echo "input error, please input a number";;
-    esac
-
-    if ${binlog}; then
-        binlog="# BINARY LOGGING #\nlog-bin = ${mysqlDataLocation}/mysql-bin\nserver-id = 1\nexpire-logs-days = 14\nsync-binlog = 1"
-        binlog=$(echo -e $binlog)
-    else
-        binlog=""
-    fi
-
-    if ${replica}; then
-        replica="# REPLICATION #\nrelay-log = ${mysqlDataLocation}/relay-bin\nslave-net-timeout = 60"
-        replica=$(echo -e $replica)
-    else
-        replica=""
-    fi
-
-    if [ "$storage" == "InnoDB" ]; then
-        key_buffer_size=32M
-        if ! is_64bit && [[ `echo $innodb_buffer_pool_size | tr -d G` -ge 4 ]]; then
-            innodb_buffer_pool_size=2G
-        fi
-
-    elif [ "$storage" == "MyISAM" ]; then
-        innodb_log_file_size=32M
-        innodb_buffer_pool_size=8M
-        if ! is_64bit && [[ `echo $key_buffer_size | tr -d G` -ge 4 ]]; then
-            key_buffer_size=2G
-        fi
-    fi
-
-    log "Info" "create my.cnf file..."
-    sleep 1
-    cat >${my_cnf_location} <<EOF
-[mysql]
-
-# CLIENT #
-port                           = 3306
-socket                         = /tmp/mysql.sock
-
-[mysqld]
-
-# GENERAL #
-port                           = 3306
-user                           = mysql
-default-storage-engine         = ${storage}
-socket                         = /tmp/mysql.sock
-pid-file                       = ${mysqlDataLocation}/mysql.pid
-skip-name-resolve
-skip-external-locking
-
-# MyISAM #
-key-buffer-size                = ${key_buffer_size}
-
-# INNODB #
-innodb-log-files-in-group      = 2
-innodb-log-file-size           = ${innodb_log_file_size}
-innodb-flush-log-at-trx-commit = 2
-innodb-file-per-table          = 1
-innodb-buffer-pool-size        = ${innodb_buffer_pool_size}
-
-# CACHES AND LIMITS #
-tmp-table-size                 = 32M
-max-heap-table-size            = 32M
-query-cache-type               = 0
-query-cache-size               = 0
-max-connections                = ${max_connections}
-thread-cache-size              = 50
-open-files-limit               = ${open_files_limit}
-table-open-cache               = ${table_open_cache}
-
-
-# SAFETY #
-max-allowed-packet             = 16M
-max-connect-errors             = 1000000
-
-# DATA STORAGE #
-datadir                        = ${mysqlDataLocation}
-
-# LOGGING #
-log-error                      = ${mysqlDataLocation}/mysql-error.log
-
-${binlog}
-
-${replica}
-
-EOF
-
-    log "Info" "create my.cnf file at ${my_cnf_location} completed."
-
-}
-
 
 create_lib_link(){
-    local lib=${1}
+    local lib="$1"
     if [ ! -s "/usr/lib64/$lib" ] && [ ! -s "/usr/lib/$lib" ]; then
         libdir=$(find /usr/lib /usr/lib64 -name "$lib" | awk 'NR==1{print}')
         if [ "$libdir" != "" ]; then
@@ -504,7 +409,7 @@ create_lib_link(){
 }
 
 create_lib64_dir(){
-    local dir=${1}
+    local dir="$1"
     if is_64bit; then
         if [ -s "$dir/lib/" ] && [ ! -s  "$dir/lib64/" ]; then
             cd ${dir}
@@ -514,17 +419,17 @@ create_lib64_dir(){
 }
 
 error_detect_depends(){
-    local command=${1}
-    local work_dir=`pwd`
-    local depend=`echo "$1" | awk '{print $4}'`
-    log "Info" "Starting to install package ${depend}"
+    local command="$1"
+    local work_dir=$(pwd)
+    local depend=$(echo "$1" | awk '{print $4}')
+    _info "Starting to install package ${depend}"
     ${command} > /dev/null 2>&1
     if [ $? -ne 0 ]; then
-        distro=`get_opsy`
-        version=`cat /proc/version`
-        architecture=`uname -m`
-        mem=`free -m`
-        disk=`df -ah`
+        distro=$(get_opsy)
+        version=$(cat /proc/version)
+        architecture=$(uname -m)
+        mem=$(free -m)
+        disk=$(df -ah)
         cat >> ${cur_dir}/lamp.log<<EOF
         Errors Detail:
         Distributions:${distro}
@@ -548,26 +453,26 @@ EOF
 }
 
 error_detect(){
-    local command=${1}
-    local work_dir=`pwd`
-    local cur_soft=`echo ${work_dir#$cur_dir} | awk -F'/' '{print $3}'`
+    local command="$1"
+    local work_dir=$(pwd)
+    local cur_soft=$(echo ${work_dir#$cur_dir} | awk -F'/' '{print $3}')
     ${command}
     if [ $? -ne 0 ]; then
-        distro=`get_opsy`
-        version=`cat /proc/version`
-        architecture=`uname -m`
-        mem=`free -m`
-        disk=`df -ah`
+        distro=$(get_opsy)
+        version=$(cat /proc/version)
+        architecture=$(uname -m)
+        mem=$(free -m)
+        disk=$(df -ah)
         cat >>${cur_dir}/lamp.log<<EOF
         Errors Detail:
-        Distributions:$distro
-        Architecture:$architecture
-        Version:$version
+        Distributions:${distro}
+        Architecture:${architecture}
+        Version:${version}
         Memery:
         ${mem}
         Disk:
         ${disk}
-        PHP Version: $php
+        PHP Version: ${php}
         PHP compile parameter: ${php_configure_args}
         Issue:failed to install ${cur_soft}
 EOF
@@ -588,23 +493,23 @@ upcase_to_lowcase(){
 
 untar(){
     local tarball_type
-    local cur_dir=`pwd`
+    local cur_dir=$(pwd)
     if [ -n ${1} ]; then
-        software_name=`echo $1 | awk -F/ '{print $NF}'`
-        tarball_type=`echo $1 | awk -F. '{print $NF}'`
-        wget -c -t3 -T3 ${1} -P ${cur_dir}/
+        software_name=$(echo $1 | awk -F/ '{print $NF}')
+        tarball_type=$(echo $1 | awk -F. '{print $NF}')
+        wget --no-check-certificate -cv -t3 -T60 ${1} -P ${cur_dir}/
         if [ $? -ne 0 ]; then
             rm -rf ${cur_dir}/${software_name}
-            wget -c -t3 -T60 ${2} -P ${cur_dir}/
-            software_name=`echo ${2} | awk -F/ '{print $NF}'`
-            tarball_type=`echo ${2} | awk -F. '{print $NF}'`
+            wget --no-check-certificate -cv -t3 -T60 ${2} -P ${cur_dir}/
+            software_name=$(echo ${2} | awk -F/ '{print $NF}')
+            tarball_type=$(echo ${2} | awk -F. '{print $NF}')
         fi
     else
-        software_name=`echo ${2} | awk -F/ '{print $NF}'`
-        tarball_type=`echo ${2} | awk -F. '{print $NF}'`
-        wget -c -t3 -T3 ${2} -P ${cur_dir}/ || exit
+        software_name=$(echo ${2} | awk -F/ '{print $NF}')
+        tarball_type=$(echo ${2} | awk -F. '{print $NF}')
+        wget --no-check-certificate -cv -t3 -T60 ${2} -P ${cur_dir}/ || exit
     fi
-    extracted_dir=`tar tf ${cur_dir}/${software_name} | tail -n 1 | awk -F/ '{print $1}'`
+    extracted_dir=$(tar tf ${cur_dir}/${software_name} | tail -n 1 | awk -F/ '{print $1}')
     case ${tarball_type} in
         gz|tgz)
             tar zxf ${cur_dir}/${software_name} -C ${cur_dir}/ && cd ${cur_dir}/${extracted_dir} || return 1
@@ -662,6 +567,15 @@ centosversion(){
     fi
 }
 
+get_centosversion(){
+    if check_sys sysRelease centos; then
+        local version="$(versionget)"
+        echo ${version%%.*}
+    else
+        echo ""
+    fi
+}
+
 debianversion(){
     if check_sys sysRelease debian; then
         local version=$( get_opsy )
@@ -674,6 +588,16 @@ debianversion(){
         fi
     else
         return 1
+    fi
+}
+
+get_debianversion(){
+    if check_sys sysRelease debian; then
+        local version=$( get_opsy )
+        local main_ver=$( echo ${version} | grep -oE  "[0-9.]+")
+        echo ${main_ver%%.*}
+    else
+        echo ""
     fi
 }
 
@@ -692,9 +616,19 @@ ubuntuversion(){
     fi
 }
 
+get_ubuntuversion(){
+    if check_sys sysRelease ubuntu; then
+        local version=$( get_opsy )
+        local main_ver=$( echo ${version} | grep -oE  "[0-9.]+")
+        echo ${main_ver%%.*}
+    else
+        echo ""
+    fi
+}
+
 parallel_make(){
-    local para="${1}"
-    cpunum=`cat /proc/cpuinfo |grep 'processor'|wc -l`
+    local para="$1"
+    cpunum=$(cat /proc/cpuinfo | grep 'processor' | wc -l)
 
     if [ ${parallel_compile} -eq 0 ]; then
         cpunum=1
@@ -709,24 +643,24 @@ parallel_make(){
 
 boot_start(){
     if check_sys packageManager apt; then
-        update-rc.d -f ${1} defaults
+        update-rc.d -f "$1" defaults
     elif check_sys packageManager yum; then
-        chkconfig --add ${1}
-        chkconfig ${1} on
+        chkconfig --add "$1"
+        chkconfig "$1" on
     fi
 }
 
 boot_stop(){
     if check_sys packageManager apt; then
-        update-rc.d -f ${1} remove
+        update-rc.d -f "$1" remove
     elif check_sys packageManager yum; then
-        chkconfig ${1} off
-        chkconfig --remove ${1}
+        chkconfig "$1" off
+        chkconfig --del "$1"
     fi
 }
 
 filter_location(){
-    local location=${1}
+    local location="$1"
     if ! echo ${location} | grep -q "^/"; then
         while true
         do
@@ -738,49 +672,33 @@ filter_location(){
     fi
 }
 
+# Download a file
+# $1: file name
+# $2: primary url
 download_file(){
-    local cur_dir=`pwd`
-    local url="${download_root_url}/${1}"
-    if [ -s ${1} ]; then
-        log "Info" "${1} [found]"
+    local cur_dir=$(pwd)
+    if [ -s "$1" ]; then
+        _info "$1 [found]"
     else
-        log "Info" "${1} not found, download now..."
-        wget -cq -t3 -T60 ${url}
+        _info "$1 not found, download now..."
+        wget --no-check-certificate -cv -t3 -T60 -O ${1} ${2}
         if [ $? -eq 0 ]; then
-            log "Info" "${1} download completed..."
+            _info "$1 download completed..."
         else
-            log "Error" "Failed to download ${1}, please download it to ${cur_dir} directory manually and try again."
-            exit 1
-        fi
-    fi
-}
-
-download_from_url(){
-    local filename=${1}
-    local cur_dir=`pwd`
-    if [ -s ${filename} ]; then
-        log "Info" "${filename} [found]"
-    else
-        log "Info" "${filename} not found, download now..."
-        wget -cq -t3 -T3 ${2}
-        if [ $? -eq 0 ]; then
-            log "Info" "${filename} download completed..."
-        else
-            rm -f ${filename}
-            log "Info" "${filename} download failed, retrying download from backup site..."
-            wget -cq -t3 -T60 ${3}
+            rm -f "$1"
+            _info "$1 download failed, retrying download from secondary url..."
+            wget --no-check-certificate -cv -t3 -T60 -O "$1" "${download_root_url}${1}"
             if [ $? -eq 0 ]; then
-                log "Info" "${filename} download completed..."
+                _info "$1 download completed..."
             else
-                log "Error" "Failed to download ${filename}, please download it to ${cur_dir} directory manually and try again."
-                exit 1
+                _error "Failed to download $1, please download it to ${cur_dir} directory manually and try again."
             fi
         fi
     fi
 }
 
 is_64bit(){
-    if [ `getconf WORD_BIT` = '32' ] && [ `getconf LONG_BIT` = '64' ]; then
+    if [ $(getconf WORD_BIT) = '32' ] && [ $(getconf LONG_BIT) = '64' ]; then
         return 0
     else
         return 1
@@ -788,7 +706,7 @@ is_64bit(){
 }
 
 is_digit(){
-    local input=${1}
+    local input="$1"
     if [[ "$input" =~ ^[0-9]+$ ]]; then
         return 0
     else
@@ -797,8 +715,8 @@ is_digit(){
 }
 
 if_in_array(){
-    local element=${1}
-    local array=${2}
+    local element="$1"
+    local array="$2"
     for i in ${array}
     do
         if [ "$i" == "$element" ]; then
@@ -809,7 +727,7 @@ if_in_array(){
 }
 
 add_to_env(){
-    local location=${1}
+    local location="$1"
     cd ${location} && [ ! -d lib ] && [ -d lib64 ] && ln -s lib64 lib
     [ -d "${location}/lib" ] && export LD_LIBRARY_PATH=${location}/lib:${LD_LIBRARY_PATH}
     [ -d "${location}/bin" ] && export PATH=${location}/bin:${PATH}
@@ -817,7 +735,7 @@ add_to_env(){
 }
 
 firewall_set(){
-    log "Info" "Starting set Firewall..."
+    _info "Starting set Firewall..."
 
     if centosversion 6; then
         if [ -e /etc/init.d/iptables ]; then
@@ -834,52 +752,56 @@ firewall_set(){
                 /etc/init.d/iptables save > /dev/null 2>&1
                 /etc/init.d/iptables restart > /dev/null 2>&1
             else
-                log "Warning" "iptables looks like not running, please manually set if necessary."
+                _warn "iptables looks like not running, please manually set if necessary."
             fi
         else
-            log "Warning" "iptables looks like not installed."
+            _warn "iptables looks like not installed."
         fi
-    elif centosversion 7; then
+    else
         systemctl status firewalld > /dev/null 2>&1
         if [ $? -eq 0 ]; then
-            firewall-cmd --permanent --zone=public --add-service=http > /dev/null 2>&1
-            firewall-cmd --permanent --zone=public --add-service=https > /dev/null 2>&1
+            default_zone=$(firewall-cmd --get-default-zone)
+            firewall-cmd --permanent --zone=${default_zone} --add-service=http > /dev/null 2>&1
+            firewall-cmd --permanent --zone=${default_zone} --add-service=https > /dev/null 2>&1
             firewall-cmd --reload > /dev/null 2>&1
         else
-            log "Warning" "firewalld looks like not running, please manually set if necessary."
+            _warn "firewalld looks like not running, please manually set if necessary."
         fi
     fi
-    log "Info" "Firewall set completed..."
+    _info "Firewall set completed..."
 }
 
 remove_packages(){
-    log "Info" "Starting remove the conflict packages..."
+    _info "Starting remove the conflict packages..."
     if check_sys packageManager apt; then
-        apt-get -y remove --purge apache2 apache2-* &> /dev/null
-        apt-get -y remove --purge mysql-client mysql-server mysql-common libmysqlclient18 &> /dev/null
-        apt-get -y remove --purge php5 php5-* &> /dev/null
+        [ "${apache}" != "do_not_install" ] && apt-get -y remove --purge apache2 apache2-* &> /dev/null
+        [ "${mysql}" != "do_not_install" ] && apt-get -y remove --purge mysql-client mysql-server mysql-common libmysqlclient18 &> /dev/null
+        [ "${php}" != "do_not_install" ] && apt-get -y remove --purge php5 php5-* php7.0 php7.0-* php7.1 php7.1-* php7.2 php7.2-* php7.3 php7.3-* &> /dev/null
     elif check_sys packageManager yum; then
-        yum -y remove httpd-* &> /dev/null
-        yum -y remove mysql-* &> /dev/null
-        yum -y remove php-* &> /dev/null
+        [ "${apache}" != "do_not_install" ] && yum -y remove httpd-* &> /dev/null
+        [ "${mysql}" != "do_not_install" ] && yum -y remove mysql-* &> /dev/null
+        [ "${php}" != "do_not_install" ] && yum -y remove php-* libzip-devel libzip &> /dev/null
     fi
-    log "Info" "Remove the conflict packages completed..."
+    _info "Remove the conflict packages completed..."
 }
 
 sync_time(){
-    log "Info" "Starting to sync time..."
-    if check_sys packageManager apt; then
-        apt-get -y update > /dev/null 2>&1
-        apt-get -y install ntpdate > /dev/null 2>&1
-    elif check_sys packageManager yum; then
-        yum -y install ntp > /dev/null 2>&1
-    fi
-    check_command_exist ntpdate
-    ntpdate -d cn.pool.ntp.org > /dev/null 2>&1
+    _info "Starting to sync time..."
+    ntpdate -bv cn.pool.ntp.org
     rm -f /etc/localtime
     ln -s /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
-    hwclock -w > /dev/null 2>&1
-    log "Info" "Sync time completed..."
+    _info "Sync time completed..."
+
+    StartDate=$(date "+%Y-%m-%d %H:%M:%S")
+    StartDateSecond=$(date +%s)
+    _info "Start time: ${StartDate}"
+
+}
+
+start_install(){
+    echo "Press any key to start...or Press Ctrl+C to cancel"
+    echo
+    char=$(get_char)
 }
 
 #Last confirm
@@ -890,19 +812,24 @@ last_confirm(){
     echo
     echo "Apache: ${apache}"
     [ "${apache}" != "do_not_install" ] && echo "Apache Location: ${apache_location}"
+    if [ "${apache_modules_install}" != "do_not_install" ]; then
+        echo "Apache Additional Modules:"
+        for a in ${apache_modules_install[@]}
+        do
+            echo "${a}"
+        done
+    fi
     echo
+    echo "Database: ${mysql}"
     if echo "${mysql}" | grep -qi "mysql"; then
-        echo "MySQL: ${mysql}"
         echo "MySQL Location: ${mysql_location}"
         echo "MySQL Data Location: ${mysql_data_location}"
         echo "MySQL Root Password: ${mysql_root_pass}"
     elif echo "${mysql}" | grep -qi "mariadb"; then
-        echo "MariaDB: ${mysql}"
         echo "MariaDB Location: ${mariadb_location}"
         echo "MariaDB Data Location: ${mariadb_data_location}"
         echo "MariaDB Root Password: ${mariadb_root_pass}"
     elif echo "${mysql}" | grep -qi "Percona"; then
-        echo "Percona: ${mysql}"
         echo "Percona Location: ${percona_location}"
         echo "Percona Data Location: ${percona_data_location}"
         echo "Percona Root Password: ${percona_root_pass}"
@@ -911,7 +838,7 @@ last_confirm(){
     echo "PHP: ${php}"
     [ "${php}" != "do_not_install" ] && echo "PHP Location: ${php_location}"
     if [ "${php_modules_install}" != "do_not_install" ]; then
-        echo "PHP Additional Modules:"
+        echo "PHP Additional Extensions:"
         for m in ${php_modules_install[@]}
         do
             echo "${m}"
@@ -921,33 +848,19 @@ last_confirm(){
     echo "phpMyAdmin: ${phpmyadmin}"
     [ "${phpmyadmin}" != "do_not_install" ] && echo "phpMyAdmin Location: ${web_root_dir}/phpmyadmin"
     echo
+    echo "KodExplorer: ${kodexplorer}"
+    [ "${kodexplorer}" != "do_not_install" ] && echo "KodExplorer Location: ${web_root_dir}/kod"
+    echo
     echo "---------------------------------------------------------------------"
     echo
-
-    echo "Press any key to start...or Press Ctrl+C to cancel"
-    echo
-    char=`get_char`
-
-    sync_time
-
-    StartDate=$(date "+%Y-%m-%d %H:%M:%S")
-    StartDateSecond=$(date +%s)
-    log "Info" "Start time: ${StartDate}"
-
-    if [ -d ${cur_dir}/software ]; then
-        rm -rf ${cur_dir}/software/*
-    else
-        mkdir -p ${cur_dir}/software
-    fi
-
 }
 
 #Finally to do
-finally(){
-    log "Info" "Starting clean up..."
+install_finally(){
+    _info "Starting clean up..."
     cd ${cur_dir}
     rm -rf ${cur_dir}/software
-    log "Info" "Clean up completed..."
+    _info "Clean up completed..."
 
     if check_sys packageManager yum; then
         firewall_set
@@ -958,26 +871,31 @@ finally(){
     echo
     echo "------------------------ Installed Overview -------------------------"
     echo
-    echo "Default Website: http://$(get_ip)"
     echo "Apache: ${apache}"
     if [ "${apache}" != "do_not_install" ]; then
+        echo "Default Website: http://$(get_ip)"
         echo "Apache Location: ${apache_location}"
     fi
+    if [ "${apache_modules_install}" != "do_not_install" ]; then
+        echo "Apache Additional Modules:"
+        for a in ${apache_modules_install[@]}
+        do
+            echo "${a}"
+        done
+    fi
     echo
+    echo "Database: ${mysql}"
     if [ -d ${mysql_location} ]; then
-        echo "MySQL Server: ${mysql}"
         echo "MySQL Location: ${mysql_location}"
         echo "MySQL Data Location: ${mysql_data_location}"
         echo "MySQL Root Password: ${mysql_root_pass}"
         dbrootpwd=${mysql_root_pass}
     elif [ -d ${mariadb_location} ]; then
-        echo "MariaDB Server: ${mysql}"
         echo "MariaDB Location: ${mariadb_location}"
         echo "MariaDB Data Location: ${mariadb_data_location}"
         echo "MariaDB Root Password: ${mariadb_root_pass}"
         dbrootpwd=${mariadb_root_pass}
     elif [ -d ${percona_location} ]; then
-        echo "Percona Server: ${mysql}"
         echo "Percona Location: ${percona_location}"
         echo "Percona Data Location: ${percona_data_location}"
         echo "Percona Root Password: ${percona_root_pass}"
@@ -985,14 +903,20 @@ finally(){
     fi
     echo
     echo "PHP: ${php}"
-    if [ "${php}" != "do_not_install" ]; then
-        echo "PHP Location: ${php_location}"
+    [ "${php}" != "do_not_install" ] && echo "PHP Location: ${php_location}"
+    if [ "${php_modules_install}" != "do_not_install" ]; then
+        echo "PHP Additional Extensions:"
+        for m in ${php_modules_install[@]}
+        do
+            echo "${m}"
+        done
     fi
-    echo
-    echo "PHP Modules: ${php_modules_install}"
     echo
     echo "phpMyAdmin: ${phpmyadmin}"
     [ "${phpmyadmin}" != "do_not_install" ] && echo "phpMyAdmin Location: ${web_root_dir}/phpmyadmin"
+    echo
+    echo "KodExplorer: ${kodexplorer}"
+    [ "${kodexplorer}" != "do_not_install" ] && echo "KodExplorer Location: ${web_root_dir}/kod"
     echo
     echo "---------------------------------------------------------------------"
     echo
@@ -1003,6 +927,27 @@ finally(){
     sed -i "s@^mysql_location=.*@mysql_location=${mysql_location}@" /usr/bin/lamp
     sed -i "s@^mariadb_location=.*@mariadb_location=${mariadb_location}@" /usr/bin/lamp
     sed -i "s@^percona_location=.*@percona_location=${percona_location}@" /usr/bin/lamp
+    sed -i "s@^web_root_dir=.*@web_root_dir=${web_root_dir}@" /usr/bin/lamp
+
+    ldconfig
+
+    # Add phpmyadmin Alias
+    if [ -d "${web_root_dir}/phpmyadmin" ]; then
+        cat >> ${apache_location}/conf/httpd.conf <<EOF
+<IfModule alias_module>
+    Alias /phpmyadmin ${web_root_dir}/phpmyadmin
+</IfModule>
+EOF
+    fi
+
+    # Add kodexplorer Alias
+    if [ -d "${web_root_dir}/kod" ]; then
+        cat >> ${apache_location}/conf/httpd.conf <<EOF
+<IfModule alias_module>
+    Alias /kod ${web_root_dir}/kod
+</IfModule>
+EOF
+    fi
 
     if [ "${apache}" != "do_not_install" ]; then
         echo "Starting Apache..."
@@ -1012,47 +957,55 @@ finally(){
         echo "Starting Database..."
         /etc/init.d/mysqld start > /dev/null 2>&1
     fi
-    if if_in_array "${php_memcached_filename}" "${php_modules_install}"; then
-        echo "Starting Memcached..." 
+
+    if if_in_array "${php_memcached_filename}" "${php_modules_install}" || if_in_array "${php_memcached_filename2}" "${php_modules_install}"; then
+        echo "Starting Memcached..."
         /etc/init.d/memcached start > /dev/null 2>&1
     fi
-    if [[ "${php}" == "${php7_0_filename}" || "$php" == "${php7_1_filename}" ]]; then
-        if if_in_array "${php_redis_filename2}" "${php_modules_install}"; then
-            echo "Starting Redis-server..."
-            /etc/init.d/redis-server start > /dev/null 2>&1
-        fi
-    else
-        if if_in_array "${php_redis_filename}" "${php_modules_install}"; then
-            echo "Starting Redis-server..."
-            /etc/init.d/redis-server start > /dev/null 2>&1
-        fi
+
+    if if_in_array "${php_redis_filename}" "${php_modules_install}" || if_in_array "${php_redis_filename2}" "${php_modules_install}"; then
+        echo "Starting Redis-server..."
+        /etc/init.d/redis-server start > /dev/null 2>&1
     fi
 
     # Install phpmyadmin database
-    if [ -d "${web_root_dir}/phpmyadmin" ]; then
+    if [ -d "${web_root_dir}/phpmyadmin" ] && [ -f /usr/bin/mysql ]; then
         /usr/bin/mysql -uroot -p${dbrootpwd} < ${web_root_dir}/phpmyadmin/sql/create_tables.sql > /dev/null 2>&1
     fi
-    sleep 3
-    netstat -nxtlp
 
+    sleep 1
+    netstat -tunlp
     echo
-    echo "Start time     : ${StartDate}"
-    echo -e "Completion time: $(date "+%Y-%m-%d %H:%M:%S") (Use:${RED} $[($(date +%s)-StartDateSecond)/60]${PLAIN} minutes)"
-    echo "Welcome to visit our website: https://lamp.sh"
-    echo "Enjoy it"
+    _info "Start time     : ${StartDate}"
+    _info "Completion time: $(date "+%Y-%m-%d %H:%M:%S") (Use:$(_red $[($(date +%s)-StartDateSecond)/60]) minutes)"
+    _info "Welcome to visit our website:"
+    _info "https://lamp.sh"
+    _info "Enjoy it"
 
     exit 0
 }
 
 #Install tools
-install_tool(){
-    log "Info" "Starting to install tools..."
+install_tools(){
+    _info "Starting to install development tools..."
     if check_sys packageManager apt; then
-        apt-get -y install gcc g++ make wget perl curl bzip2 libreadline-dev net-tools python python-dev > /dev/null 2>&1
+        apt-get -y update > /dev/null 2>&1
+        apt_tools=(gcc g++ make wget perl curl bzip2 libreadline-dev net-tools python python-dev cron ca-certificates ntpdate)
+        for tool in ${apt_tools[@]}; do
+            error_detect_depends "apt-get -y install ${tool}"
+        done
     elif check_sys packageManager yum; then
-        yum -y install gcc gcc-c++ make wget perl curl bzip2 readline readline-devel net-tools python python-devel > /dev/null 2>&1
+        yum makecache > /dev/null 2>&1
+        yum_tools=(yum-utils gcc gcc-c++ make wget perl curl bzip2 readline readline-devel net-tools python python-devel crontabs ca-certificates ntpdate)
+        for tool in ${yum_tools[@]}; do
+            error_detect_depends "yum -y install ${tool}"
+        done
+        if centosversion 6 || centosversion 7; then
+            error_detect_depends "yum -y install epel-release"
+            yum-config-manager --enable epel > /dev/null 2>&1
+        fi
     fi
-    log "Info" "Install tools completed..."
+    _info "Install development tools completed..."
 
     check_command_exist "gcc"
     check_command_exist "g++"
@@ -1060,16 +1013,21 @@ install_tool(){
     check_command_exist "wget"
     check_command_exist "perl"
     check_command_exist "netstat"
+    check_command_exist "ntpdate"
 }
 
 #start install lamp
-install_lamp(){
-    last_confirm
+lamp_install(){
     disable_selinux
-    install_tool
+    install_tools
+    sync_time
     remove_packages
 
+    if [ ! -d ${cur_dir}/software ]; then
+        mkdir -p ${cur_dir}/software
+    fi
     [ "${apache}" != "do_not_install" ] && check_installed "install_apache" "${apache_location}"
+    [ "${apache_modules_install}" != "do_not_install" ] && install_apache_modules
     if echo "${mysql}" | grep -qi "mysql"; then
         check_installed "install_mysqld" "${mysql_location}"
     elif echo "${mysql}" | grep -qi "mariadb"; then
@@ -1079,34 +1037,29 @@ install_lamp(){
     fi
     [ "${php}" != "do_not_install" ] && check_installed "install_php" "${php_location}"
     [ "${phpmyadmin}" != "do_not_install" ] && install_phpmyadmin
+    [ "${kodexplorer}" != "do_not_install" ] && install_kodexplorer
     [ "${php_modules_install}" != "do_not_install" ] && install_php_modules "${phpConfig}"
 
-    finally
+    install_finally
 }
 
 #Pre-installation
-preinstall_lamp(){
-    check_ram
-    display_os_info
+lamp_preinstall(){
     apache_preinstall_settings
     mysql_preinstall_settings
     php_preinstall_settings
     php_modules_preinstall_settings
     phpmyadmin_preinstall_settings
+    kodexplorer_preinstall_settings
 }
 
 #Pre-installation settings
 pre_setting(){
-    if check_sys packageManager yum || check_sys packageManager apt; then
-        # Not support CentOS 5 & Debian 6
-        if centosversion 5 || debianversion 6; then
-            log "Error" "Not supported OS, please change to CentOS 6+ or Debian 7+ or Ubuntu 12+ and try again."
-            exit 1
-        fi
-        preinstall_lamp
-        install_lamp
-    else
-        log "Error" "Not supported OS, please change to CentOS 6+ or Debian 7+ or Ubuntu 12+ and try again."
-        exit 1
-    fi
+    check_os
+    check_ram
+    display_os_info
+    lamp_preinstall
+    last_confirm
+    start_install
+    lamp_install
 }
